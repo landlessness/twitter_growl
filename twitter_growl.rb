@@ -122,7 +122,6 @@ class TwitterGrowl
   private
     def request(url)
       user, password = @config.values_at(:user, :password)
-      puts 'url ' + url
       open(url, :http_basic_authentication => [ user, password ]) do |u|
         yield(u)
       end
