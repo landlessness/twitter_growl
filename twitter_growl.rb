@@ -91,10 +91,11 @@ class TwitterGrowl
 
   def search_tweets
     returning [] do |t|
-      @config[:searches].each do |q|
+      (@config[:searches]||[]).each do |q|
         u = @@search_tweets_url + URI.escape(q, Regexp.new("[^#{URI::PATTERN::UNRESERVED}]"))
         response = request(u) { |f| JSON.parse(f.read) }['results']
-        last_created_at = Time.parse(@config[:last_created_at] || response.last['created_at'])
+        next if response.empty?
+        last_created_at = Time.parse(@config[:last_created_at] || response.last['created_at'] || Time.now)
         response.each do |r|
           created_at = Time.parse(r['created_at'])
           break  if created_at <= last_created_at
@@ -109,9 +110,10 @@ class TwitterGrowl
   def run
     tweets = (friends_tweets + search_tweets).sort
 
-    @config[:last_created_at] = tweets.last.created_at.strftime("%a %b %d %H:%M:%S %z %Y")
-    File.open(@@config, 'w') { |f| f.write(YAML.dump(@config)) }
-
+    unless tweets.empty?
+      @config[:last_created_at] = tweets.last.created_at.strftime("%a %b %d %H:%M:%S %z %Y") 
+      File.open(@@config, 'w') { |f| f.write(YAML.dump(@config)) }
+    end
     tweets.each do |t|
       growl(t)
     end
