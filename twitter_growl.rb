@@ -6,9 +6,23 @@ require 'rubygems'
 require 'json'
 require 'active_support'
 
+class Tweet
+  def initialize(options)
+    @text = options[:text]
+    @user_id = options[:user_id]
+    @screen_name = options[:screen_name]
+    @profile_image_url = options[:profile_image_url]
+    @created_at = options[:created_at]
+  end
+  attr_accessor :text, :user_id, :screen_name, :profile_image_url, :created_at
+  def <=>(t) 
+    return self.created_at <=> t.created_at
+  end
+end
 
 class TwitterGrowl
-  @@url = 'http://twitter.com/statuses/friends_timeline.json'
+  @@friends_tweets_url = 'http://twitter.com/statuses/friends_timeline.json'
+  @@search_tweets_url = 'http://search.twitter.com/search.json?q='
   @@config = File.dirname(__FILE__) + '/config.yml'
   @@cache_path = File.dirname(__FILE__) + '/cache/'
 
@@ -36,7 +50,11 @@ class TwitterGrowl
     end
   end
 
-  def user(user_id)
+  def user(tweet)
+    # HACK: the current search api does not return an accurate user id
+    # so using screen name in those cases
+    # cf. http://code.google.com/p/twitter-api/issues/detail?id=214
+    user_id = tweet.user_id.nil? ? tweet.screen_name : tweet.user_id
     file = "#{@@cache_path}#{user_id}.json"
     unless File.exists?(file) && !File.zero?(file)
       open(file, 'w') do |f|
@@ -50,28 +68,54 @@ class TwitterGrowl
   end
 
   def growl(tweet)
-    #puts tweet['text']
-    options = "--image #{image(tweet['user']['profile_image_url'])}"
+    options = "--image #{image(tweet.profile_image_url)}"
     options += " --sticky"  if sticky?(tweet)
-    open("|growlnotify #{options} #{tweet['user']['screen_name']} 2>/dev/null", 'w') do |g|
-      g.write(tweet['text'])
+    open("|growlnotify #{options} #{tweet.screen_name} 2>/dev/null", 'w') do |g|
+      g.write(tweet.text)
+    end
+  end
+
+  def friends_tweets
+    response = request(@@friends_tweets_url) { |f| JSON.parse(f.read) }
+
+    last_created_at = Time.parse(@config[:last_created_at] || response.last['created_at'])
+
+    returning [] do |t|
+      response.each do |r|
+        created_at = Time.parse(r['created_at'])
+        break  if created_at <= last_created_at
+        screen_name = r['from_user']
+        next   if screen_name == @config[:user]
+        t << Tweet.new(:created_at => created_at, :screen_name => r['user']['screen_name'], :text => r['text'], :profile_image_url => r['user']['profile_image_url'], :user_id => r['user']['id'])
+      end
+    end
+  end
+
+  def search_tweets
+    returning [] do |t|
+      @config[:searches].each do |q|
+        u = @@search_tweets_url + URI.escape(q, Regexp.new("[^#{URI::PATTERN::UNRESERVED}]"))
+        response = request(u) { |f| JSON.parse(f.read) }['results']
+        last_created_at = Time.parse(@config[:last_created_at] || response.last['created_at'])
+        response.each do |r|
+          created_at = Time.parse(r['created_at'])
+          break  if created_at <= last_created_at
+          screen_name = r['from_user']
+          next   if screen_name == @config[:user]
+          t << Tweet.new(:created_at => created_at, :screen_name => screen_name, :text => r['text'], :profile_image_url => r['profile_image_url'], :user_id => nil)
+        end
+      end
     end
   end
 
   def run
-    tweets = request(@@url) { |f| JSON.parse(f.read) }
+    tweets = friends_tweets + search_tweets
 
-    last_created_at = Time.parse(@config[:last_created_at] || tweets.last['created_at'])
-
-    tweets.each do |t|
-      created_at = Time.parse(t['created_at'])
-      break  if created_at <= last_created_at
-      next   if t['user']['screen_name'] == @config[:user]
-
+    tweets.sort.each do |t|
       growl(t)
     end
 
-    @config[:last_created_at] = tweets.first['created_at']
+    @config[:last_created_at] = tweets.first.created_at
     File.open(@@config, 'w') { |f| f.write(YAML.dump(@config)) }
   end
 
@@ -85,8 +129,8 @@ class TwitterGrowl
 
     def sticky?(tweet)
       keywords = @config[:sticky] || []
-      keywords.any? { |k| tweet['text'].include?(k) } ||
-        user(tweet['user']['id'])['notifications']
+      keywords.any? { |k| tweet.text.include?(k) } ||
+        user(tweet)['notifications']
     end
 end
 
