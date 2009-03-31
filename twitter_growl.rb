@@ -77,9 +77,7 @@ class TwitterGrowl
 
   def friends_tweets
     response = request(@@friends_tweets_url) { |f| JSON.parse(f.read) }
-
     last_created_at = Time.parse(@config[:last_created_at] || response.last['created_at'])
-
     returning [] do |t|
       response.each do |r|
         created_at = Time.parse(r['created_at'])
@@ -109,19 +107,20 @@ class TwitterGrowl
   end
 
   def run
-    tweets = friends_tweets + search_tweets
+    tweets = (friends_tweets + search_tweets).sort
 
-    tweets.sort.each do |t|
+    @config[:last_created_at] = tweets.last.created_at.strftime("%a %b %d %H:%M:%S %z %Y")
+    File.open(@@config, 'w') { |f| f.write(YAML.dump(@config)) }
+
+    tweets.each do |t|
       growl(t)
     end
-
-    @config[:last_created_at] = tweets.first.created_at
-    File.open(@@config, 'w') { |f| f.write(YAML.dump(@config)) }
   end
 
   private
     def request(url)
       user, password = @config.values_at(:user, :password)
+      puts 'url ' + url
       open(url, :http_basic_authentication => [ user, password ]) do |u|
         yield(u)
       end
