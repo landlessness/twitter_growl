@@ -77,6 +77,7 @@ class TwitterGrowl
 
   def friends_tweets
     response = request(@@friends_tweets_url) { |f| JSON.parse(f.read) }
+    return [] if response.empty?
     last_created_at = Time.parse(@config[:last_created_at] || response.last['created_at'])
     returning [] do |t|
       response.each do |r|
@@ -109,7 +110,7 @@ class TwitterGrowl
 
   def run
     tweets = (friends_tweets + search_tweets).sort
-
+    
     unless tweets.empty?
       @config[:last_created_at] = tweets.last.created_at.strftime("%a %b %d %H:%M:%S %z %Y") 
       File.open(@@config, 'w') { |f| f.write(YAML.dump(@config)) }
@@ -122,6 +123,7 @@ class TwitterGrowl
   private
     def request(url)
       user, password = @config.values_at(:user, :password)
+      puts url
       open(url, :http_basic_authentication => [ user, password ]) do |u|
         yield(u)
       end
