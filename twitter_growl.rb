@@ -1,5 +1,4 @@
 #!/usr/bin/env ruby
-
 require 'uri'
 require 'open-uri'
 require 'rubygems'
@@ -24,17 +23,16 @@ class Twitter
 
   def initialize(config)
     @username, @password = config.values_at(:user, :password)
-    @last_created_at = config[:last_created_at] ? Time.parse(config[:last_created_at]) : 1.year.ago
     @searches = config[:searches] || []
   end
-  
-  def friends_tweets
+
+  def friends_tweets(last_created_at)
     response = request(@@friends_tweets_url) { |f| JSON.parse(f.read) }
     return [] if response.empty?
     returning [] do |t|
       response.each do |r|
         created_at = Time.parse(r['created_at'])
-        break  if created_at <= @last_created_at
+        break  if created_at <= last_created_at
         screen_name = r['from_user']
         next   if screen_name == @username
         user_id = r['user']['id']
@@ -43,7 +41,7 @@ class Twitter
     end
   end
 
-  def search_tweets
+  def search_tweets(last_created_at)
     returning [] do |t|
       @searches.each do |q|
         u = @@search_tweets_url + URI.escape(q, Regexp.new("[^#{URI::PATTERN::UNRESERVED}]"))
@@ -51,7 +49,7 @@ class Twitter
         next if response.empty?
         response.each do |r|
           created_at = Time.parse(r['created_at'])
-          break  if created_at <= @last_created_at
+          break  if created_at <= last_created_at
           screen_name = r['from_user']
           next   if screen_name == @username
           t << Tweet.new(:created_at => created_at, :screen_name => screen_name, :text => r['text'], :profile_image_url => r['profile_image_url'], :user_id => nil, :user => user(screen_name), :tweet_type => SEARCH_TWEET)
@@ -75,9 +73,13 @@ class Twitter
   private
 
   def request(url)
-    puts url
-    open(url, :http_basic_authentication => [ @username, @password ]) do |u|
-      yield(u)
+    # puts url
+    begin
+      open(url, :http_basic_authentication => [ @username, @password ]) do |u|
+        yield(u)
+      end      
+    rescue Exception => e
+      # puts e
     end
   end  
 
@@ -128,43 +130,47 @@ end
 
 class TwitterGrowl
   @@config = File.dirname(__FILE__) + '/config.yml'
-
+  @timer = nil
+  
   def initialize
     @config = YAML.load_file(@@config)
     @twitter = Twitter.new @config
     @growler = Growler.new
     @tweets = []
+    @last_created_at = @config[:last_created_at] ? Time.parse(@config[:last_created_at]) : 1.year.ago
   end
 
   def run
-    @tweets = (@twitter.friends_tweets + @twitter.search_tweets).sort
-
-    mark_time(@tweets.last.created_at) unless @tweets.empty?
-    
+    @tweets = (@twitter.friends_tweets(@last_created_at) + @twitter.search_tweets(@last_created_at)).sort
+    @last_created_at = @tweets.empty? ? Time.now : @tweets.last.created_at
+    save_last_created_at(@last_created_at) 
     @timer = OSX::NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(3.0, self, :growl, nil, true)
   end
 
   def growl
     if @tweets.empty?
-      @timer = OSX::NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(15.0, self, :exit, nil, false)
+      @timer.invalidate
+      if (sleep_time = 5.minutes - (Time.now - @last_created_at)) > 0
+        # puts "sleeping for #{sleep_time} seconds"
+        OSX::NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(sleep_time.to_i, self, :run, nil, true)       
+      else
+        run
+      end
     else
       t = @tweets.shift
-      puts 'growl: '  + t.text
+      # puts 'growl: '  + t.text
       sticky, priority = sticky?(t) ? [true,1] : [false,0]
       @growler.growl(t.tweet_type, t.screen_name, t.text, t.screen_name, sticky, priority, t.profile_image_url)
     end
   end
   
-  def exit
-    exit!
-  end
-
   private
   def sticky?(tweet)
     keywords = @config[:sticky] || []
     keywords.any? { |k| tweet.text.downcase.include?(k) } || tweet.user['notifications']
   end
-  def mark_time(time)
+
+  def save_last_created_at(time)
     @config[:last_created_at] = time.strftime("%a %b %d %H:%M:%S %z %Y")
     File.open(@@config, 'w') { |f| f.write(YAML.dump(@config)) }    
   end
