@@ -69,7 +69,7 @@ class TwitterGrowl
 
   def growl(tweet)
     options = "--image #{image(tweet.profile_image_url)}"
-    options += " --sticky"  if sticky?(tweet)
+    options += " --sticky" if sticky?(tweet)
     open("|growlnotify #{options} #{tweet.screen_name} 2>/dev/null", 'w') do |g|
       g.write(tweet.text)
     end
@@ -110,7 +110,6 @@ class TwitterGrowl
 
   def run
     tweets = (friends_tweets + search_tweets).sort
-    
     unless tweets.empty?
       @config[:last_created_at] = tweets.last.created_at.strftime("%a %b %d %H:%M:%S %z %Y") 
       File.open(@@config, 'w') { |f| f.write(YAML.dump(@config)) }
@@ -123,7 +122,6 @@ class TwitterGrowl
   private
     def request(url)
       user, password = @config.values_at(:user, :password)
-      puts url
       open(url, :http_basic_authentication => [ user, password ]) do |u|
         yield(u)
       end
