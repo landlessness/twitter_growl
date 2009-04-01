@@ -4,8 +4,7 @@ I just want to receive Growl notifications when my friends update their Twitter 
 
 h2. Installation
 
-# Install "growlnotify":http://growl.info/extras.php#growlnotify from the Growl
-  disk image
+# Install the RubyCocoa gem. http://www.rubycocoa.com/an-introduction-to-rubycocoa/3 has good instructions
 # Create a config.yml file based on config.yml.sample and update it with your
   Twitter username and password
 # Add a cron job:
