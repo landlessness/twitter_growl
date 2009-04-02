@@ -1,15 +1,12 @@
 h2. Twitter Growl
 
-I just want to receive Growl notifications when my friends update their Twitter statuses and I don't want to install the memory hog that is Twitterific.
+Growl notifications for friends and custom search terms.
+
+After installing you can go to the Growl preferences panel (open /Library/PreferencePanes/Growl.prefPane), click on Applications, select TwitterGrowl then Notifications to customize the appearance of Search tweets and Friend tweets.
 
 h2. Installation
 
-# Install the RubyCocoa gem. http://www.rubycocoa.com/an-introduction-to-rubycocoa/3 has good instructions
-# Create a config.yml file based on config.yml.sample and update it with your
-  Twitter username and password
-# Add a cron job:
-
-<blockquote><pre><code>
-  # twitter-growl
-  */5 * * * * twitter-growl/twitter_growl.rb
-</code></pre></blockquote>
+# Install RubyCocoa. http://www.rubycocoa.com/an-introduction-to-rubycocoa/3 has good instructions
+# install the growl notifier gem: sudo gem install growlnotifier
+# Create a config.yml file based on config.yml.sample and update it with your Twitter username and password
+# To run the script at startup create a twitter_growl.plist file based on twitter_growl.plist.sample, copy the file to ~Library/LaunchAgents

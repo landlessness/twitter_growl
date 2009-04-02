@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" \
+"http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<dict>
+  <key>Label</key>
+  <string>twitter_growl</string>
+  <key>Program</key>
+  <string>/Users/[MY_NAME]/git/twitter_growl/twitter_growl.rb</string>
+  <key>KeepAlive</key>
+  <true/>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/usr/local/bin</string>
+  </dict>
+  <key>LowPriorityIO</key>
+  <true/>
+</dict>
+</plist>
