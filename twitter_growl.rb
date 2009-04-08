@@ -7,6 +7,7 @@ require 'active_support'
 require 'osx/cocoa'
 include OSX
 require 'growl'
+require 'htmlentities'
 
 class Twitter
 
@@ -17,17 +18,16 @@ class Twitter
   @@cache_path = File.dirname(__FILE__) + '/cache/'
   Dir.mkdir(@@cache_path)  unless File.exist?(@@cache_path)
 
-  @@friends_tweets_url = 'http://twitter.com/statuses/friends_timeline.json'
-  @@search_tweets_url = 'http://search.twitter.com/search.json?q='
-  @@user_url = 'http://twitter.com/users/show/'
-
   def initialize(config)
     @username, @password = config.values_at(:user, :password)
     @searches = config[:searches] || []
+    @friends_tweets_url = "#{config[:urls][:twitter]}/statuses/friends_timeline.json"
+    @search_tweets_url = "#{config[:urls][:twitter_search]}/search.json?q="
+    @user_url = "#{config[:urls][:twitter]}/users/show/"
   end
 
   def friends_tweets(last_created_at)
-    response = request(@@friends_tweets_url) { |f| JSON.parse(f.read) }
+    response = request(@friends_tweets_url) { |f| JSON.parse(f.read) }
     return [] if response.empty?
     returning [] do |t|
       response.each do |r|
@@ -44,7 +44,7 @@ class Twitter
   def search_tweets(last_created_at)
     returning [] do |t|
       @searches.each do |q|
-        u = @@search_tweets_url + URI.escape(q, Regexp.new("[^#{URI::PATTERN::UNRESERVED}]"))
+        u = @search_tweets_url + URI.escape(q, Regexp.new("[^#{URI::PATTERN::UNRESERVED}]"))
         response = request(u) { |f| JSON.parse(f.read) }['results']
         next if response.empty?
         response.each do |r|
@@ -62,7 +62,7 @@ class Twitter
     file = "#{@@cache_path}#{id}.json"
     unless File.exists?(file) && !File.zero?(file)
       open(file, 'w') do |f|
-        request("#{@@user_url}#{id}.json") do |u|
+        request("#{@user_url}#{id}.json") do |u|
           f.write(u.read)
         end
       end
@@ -97,7 +97,11 @@ class Tweet
     @tweet_type = options[:tweet_type]
   end
 
-  attr_accessor :tweet_type, :text, :user, :user_id, :screen_name, :profile_image_url, :created_at
+  def plain_text
+    HTMLEntities.new.decode(@text)
+  end
+
+  attr_accessor :tweet_type, :user, :user_id, :screen_name, :profile_image_url, :created_at
 
   def <=>(t) 
     return self.created_at <=> t.created_at
@@ -150,7 +154,7 @@ class TwitterGrowl
   def growl
     if @tweets.empty?
       @timer.invalidate
-      if (sleep_time = 5.minutes - (Time.now - @last_created_at)) > 0
+      if (sleep_time = 10.minutes - (Time.now - @last_created_at)) > 0
         # puts "sleeping for #{sleep_time} seconds"
         OSX::NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(sleep_time.to_i, self, :run, nil, true)       
       else
@@ -158,16 +162,15 @@ class TwitterGrowl
       end
     else
       t = @tweets.shift
-      # puts 'growl: '  + t.text
       sticky, priority = sticky?(t) ? [true,1] : [false,0]
-      @growler.growl(t.tweet_type, t.screen_name, t.text, t.screen_name, sticky, priority, t.profile_image_url)
+      @growler.growl(t.tweet_type, t.screen_name, t.plain_text, t.screen_name, sticky, priority, t.profile_image_url)
     end
   end
   
   private
   def sticky?(tweet)
     keywords = @config[:sticky] || []
-    keywords.any? { |k| tweet.text.downcase.include?(k) } || tweet.user['notifications']
+    keywords.any? { |k| tweet.plain_text.downcase.include?(k) } || tweet.user['notifications']
   end
 
   def save_last_created_at(time)

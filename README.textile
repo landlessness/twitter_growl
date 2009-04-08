@@ -6,7 +6,7 @@ After installing you can go to the Growl preferences panel (open /Library/Prefer
 
 h2. Installation
 
-# Install RubyCocoa. http://www.rubycocoa.com/an-introduction-to-rubycocoa/3 has good instructions
-# install the growl notifier gem: sudo gem install growlnotifier
-# Create a config.yml file based on config.yml.sample and update it with your Twitter username and password
-# To run the script at startup create a twitter_growl.plist file based on twitter_growl.plist.sample, copy the file to ~Library/LaunchAgents
+# Install RubyCocoa. http://www.rubycocoa.com/an-introduction-to-rubycocoa/3 has good instructions.
+# Install the growl notifier gem: sudo gem install growlnotifier.
+# Create a config.yml file based on config.yml.sample and update it with your Twitter username and password.
+# To run the script at startup create a twitter_growl.plist file based on twitter_growl.plist.sample, copy the file to the ~/Library/LaunchAgents/ directory then restart your machine.
