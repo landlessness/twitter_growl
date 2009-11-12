@@ -11,31 +11,6 @@ require 'growl'
 require 'htmlentities'
 require 'twitter_search'
 
-class Facebook
-  FACEBOOK_STATUS = :FacebookStatus
-  
-  attr_accessor :open_streams_url
-  
-  def initialize(config)    
-    @user_id = config[:facebook][:user_id]
-    @app_id = config[:facebook][:app_id]
-    @session_key = config[:facebook][:session_key]
-    @session_secret = config[:facebook][:session_secret]
-    @app_secret = config[:facebook][:app_secret]
-    raw_sig = "app_id=#{@app_id}session_key=#{@session_key}source_id=#{@user_id}#{@app_secret}"
-    @checksum_sig = Digest::MD5.hexdigest raw_sig 
-    @open_streams_url = 
-    "#{config[:facebook][:url]}/activitystreams/feed.php" +
-    "?source_id=#{@user_id}"+
-    "&app_id=#{@app_id}" +
-    "&session_key=#{@session_key}" +
-    "&sig=#{@checksum_sig}" +
-    "&v=0.7" +
-    "&read"
-  end
-  
-end
-
 class Twitter
 
   FRIEND_TWEET = :FriendTweet
