@@ -16,6 +16,11 @@ class Twitter
   FRIEND_TWEET = :FriendTweet
   SEARCH_TWEET = :SearchTweet
   TWEET = :Tweet
+
+  SEARCH_URL = YAML.load_file("#{File.dirname(__FILE__)}/config.yml")[:twitter][:search_url]
+
+  TwitterSearch::Client::TWITTER_SEARCH_API_URL = "#{SEARCH_URL}/search.json"
+  TwitterSearch::Client::TWITTER_TRENDS_API_URL = "#{SEARCH_URL}/trends/current.json"
   
   @@cache_path = File.dirname(__FILE__) + '/cache/'
   Dir.mkdir(@@cache_path)  unless File.exist?(@@cache_path)
@@ -24,7 +29,9 @@ class Twitter
     @username, @password = config.values_at(:user, :password)
     @searches = config[:searches] || []
     @friends_tweets_url = "#{config[:url]}/statuses/friends_timeline.json"
+
     @search_tweets_client = TwitterSearch::Client.new 'Twitter Growl'
+    
     @user_url = "#{config[:url]}/users/show/"
   end
 
