@@ -1,4 +1,5 @@
 #!/usr/bin/env ruby
+require 'digest/md5'
 require 'uri'
 require 'open-uri'
 require 'rubygems'
@@ -8,6 +9,32 @@ require 'osx/cocoa'
 include OSX
 require 'growl'
 require 'htmlentities'
+require 'twitter_search'
+
+class Facebook
+  FACEBOOK_STATUS = :FacebookStatus
+  
+  attr_accessor :open_streams_url
+  
+  def initialize(config)    
+    @user_id = config[:facebook][:user_id]
+    @app_id = config[:facebook][:app_id]
+    @session_key = config[:facebook][:session_key]
+    @session_secret = config[:facebook][:session_secret]
+    @app_secret = config[:facebook][:app_secret]
+    raw_sig = "app_id=#{@app_id}session_key=#{@session_key}source_id=#{@user_id}#{@app_secret}"
+    @checksum_sig = Digest::MD5.hexdigest raw_sig 
+    @open_streams_url = 
+    "#{config[:facebook][:url]}/activitystreams/feed.php" +
+    "?source_id=#{@user_id}"+
+    "&app_id=#{@app_id}" +
+    "&session_key=#{@session_key}" +
+    "&sig=#{@checksum_sig}" +
+    "&v=0.7" +
+    "&read"
+  end
+  
+end
 
 class Twitter
 
@@ -21,14 +48,14 @@ class Twitter
   def initialize(config)
     @username, @password = config.values_at(:user, :password)
     @searches = config[:searches] || []
-    @friends_tweets_url = "#{config[:urls][:twitter]}/statuses/friends_timeline.json"
-    @search_tweets_url = "#{config[:urls][:twitter_search]}/search.json?q="
-    @user_url = "#{config[:urls][:twitter]}/users/show/"
+    @friends_tweets_url = "#{config[:url]}/statuses/friends_timeline.json"
+    @search_tweets_client = TwitterSearch::Client.new 'Twitter Growl'
+    @user_url = "#{config[:url]}/users/show/"
   end
 
   def friends_tweets(last_created_at)
     response = request(@friends_tweets_url) { |f| JSON.parse(f.read) }
-    return [] if response.empty?
+    return [] if response.is_a?(OpenURI::HTTPError) || response.empty?
     returning [] do |t|
       response.each do |r|
         created_at = Time.parse(r['created_at'])
@@ -44,15 +71,12 @@ class Twitter
   def search_tweets(last_created_at)
     returning [] do |t|
       @searches.each do |q|
-        u = @search_tweets_url + URI.escape(q, Regexp.new("[^#{URI::PATTERN::UNRESERVED}]"))
-        response = request(u) { |f| JSON.parse(f.read) }['results']
-        next if response.empty?
-        response.each do |r|
-          created_at = Time.parse(r['created_at'])
+        @search_tweets_client.query(:q => q).each do |r|
+          created_at = Time.parse(r.created_at)
           break  if created_at <= last_created_at
-          screen_name = r['from_user']
-          next   if screen_name == @username
-          t << Tweet.new(:created_at => created_at, :screen_name => screen_name, :text => r['text'], :profile_image_url => r['profile_image_url'], :user_id => nil, :user => user(screen_name), :tweet_type => SEARCH_TWEET)
+          screen_name = r.from_user
+          next if screen_name == @username
+          t << Tweet.new(:created_at => created_at, :screen_name => screen_name, :text => r.text, :profile_image_url => r.profile_image_url, :user_id => nil, :user => user(screen_name), :tweet_type => SEARCH_TWEET)
         end
       end
     end
@@ -138,7 +162,7 @@ class TwitterGrowl
   
   def initialize
     @config = YAML.load_file(@@config)
-    @twitter = Twitter.new @config
+    @twitter = Twitter.new @config[:twitter]
     @growler = Growler.new
     @tweets = []
     @last_created_at = @config[:last_created_at] ? Time.parse(@config[:last_created_at]) : 1.year.ago
@@ -146,6 +170,7 @@ class TwitterGrowl
 
   def run
     @tweets = (@twitter.friends_tweets(@last_created_at) + @twitter.search_tweets(@last_created_at)).sort
+    # @tweets = @twitter.friends_tweets(@last_created_at).sort
     @last_created_at = @tweets.empty? ? Time.now : @tweets.last.created_at
     save_last_created_at(@last_created_at) 
     @timer = OSX::NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(3.0, self, :growl, nil, true)
